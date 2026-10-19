@@ -1,3 +1,5 @@
+#pragma once
+
 #include <execinfo.h>
 #include <unistd.h>
 #include <ucontext.h>
@@ -55,10 +57,10 @@ static int print_frame_cb(
     return 0;
 }
 
-static void segfault_handler(int sig, siginfo_t*, void*) {
+static void segfault_handler(int sig) {
     std::vector<void*> frames(1024);
 
-    size_t count = 0;
+    int count = 0;
     while (true) {
         int n = backtrace(frames.data(), frames.size());
 
@@ -81,19 +83,14 @@ static void segfault_handler(int sig, siginfo_t*, void*) {
             nullptr);
     }
 
-    std::_Exit(128 + sig);
+    // restore the default sig handler and re-raise sig
+    std::signal(sig, SIG_DFL);
+    std::raise(sig);
 }
 
 struct SigHandlerInstaller {
     SigHandlerInstaller() {
-        struct sigaction sa{};
-
-        sa.sa_sigaction = segfault_handler;
-        sigemptyset(&sa.sa_mask);
-
-        sa.sa_flags = SA_SIGINFO;
-
-        sigaction(SIGSEGV, &sa, nullptr);
+        std::signal(SIGSEGV, segfault_handler);
     }
 };
 
